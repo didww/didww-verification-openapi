@@ -1,0 +1,647 @@
+---
+openapi: 3.0.3
+info:
+  title: DIDWW Verification API
+  version: v1
+  description: |
+    REST API to create phone-number verifications and report the code the user
+    received. Every request is authenticated with the OTP application
+    key and secret over HTTP Basic.
+  license:
+    name: MIT
+    url: https://github.com/didww/didww-verification-openapi/blob/main/LICENSE
+servers:
+- url: https://verification.didww.com
+  description: Production
+- url: https://verification-sandbox.didww.com
+  description: Sandbox
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: OTP application key (username) and secret (password).
+  schemas:
+    CreateVerificationRequest:
+      description: 'Payload to create a verification. Use the branch matching the delivery method: each accepts only its own options block.'
+      oneOf:
+      - "$ref": "#/components/schemas/CreateSMSVerificationRequest"
+      - "$ref": "#/components/schemas/CreateCalloutVerificationRequest"
+    CreateSMSVerificationRequest:
+      title: Create an SMS verification
+      description: Deliver the code in a text message.
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: object
+          required:
+          - destination
+          - delivery_method
+          additionalProperties: false
+          properties:
+            destination:
+              type: string
+              description: Phone number to verify, in E.164 (leading + optional).
+              example: "+4915112345678"
+            delivery_method:
+              type: string
+              enum:
+              - sms
+              description: How the code is delivered. Always "sms" in this payload.
+              example: sms
+            sms:
+              type: object
+              description: Options for the sms delivery method.
+              properties:
+                languages:
+                  type: array
+                  items:
+                    type: string
+                  example:
+                  - de-DE
+                  - en-US
+                  description: 'Preferred content languages (BCP 47 tags), most preferred first. Tags are matched exactly, so a region subtag is required: "pl" does not match the pl-PL template. Unmatched tags fall back to en-US. Supported: bg-BG, bs-BA, cs-CZ, da-DK, de-DE, el-GR, en-GB, en-US, es-419, es-ES, et-EE, fi-FI, fr-FR, he-IL, hr-HR, hu-HU, is-IS, it-IT, ja-JP, ka-GE, lt-LT, lv-LV, mk-MK, ms-MY, mt-MT, nb-NO, nl-NL, pl-PL, pt-BR, pt-PT, ro-RO, ru-RU, sk-SK, sl-SI, sq-AL, sr-RS, sv-SE, th-TH, uk-UA, zh-CN, zh-HK.'
+                app_hash:
+                  type: string
+                  nullable: true
+                  example: A1b2C3d4E5f
+                  description: Android SMS Retriever application hash (exactly 11 characters of [A-Za-z0-9+/]). When supplied, the delivered message is prefixed with "<#> " and the hash is appended as its final token so the handset can auto-fill the code. Omit it on other platforms.
+    CreateCalloutVerificationRequest:
+      title: Create a callout verification
+      description: Place a phone call that announces the code.
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: object
+          required:
+          - destination
+          - delivery_method
+          additionalProperties: false
+          properties:
+            destination:
+              type: string
+              description: Phone number to verify, in E.164 (leading + optional).
+              example: "+4915112345678"
+            delivery_method:
+              type: string
+              enum:
+              - callout
+              description: How the code is delivered. Always "callout" in this payload.
+              example: callout
+            callout:
+              type: object
+              description: Options for the callout delivery method.
+              properties:
+                languages:
+                  type: array
+                  items:
+                    type: string
+                    example: pt-BR
+                  description: 'Preferred announcement languages (BCP 47 tags), most preferred first — the same tags and the same semantics as sms.languages, so one language list works for both channels. Tags are matched exactly, so a region subtag is required: "pt" does not match the pt-PT recording. Unmatched tags fall back to en-US; the tag actually used is returned as callout.language. Supported: af-ZA, ar-AE, ar-EG, ar-SA, bg-BG, bs-BA, cs-CZ, da-DK, de-DE, el-GR, en-GB, en-US, es-419, es-ES, et-EE, fi-FI, fr-FR, he-IL, hi-IN, hr-HR, hu-HU, id-ID, is-IS, it-IT, ja-JP, lt-LT, lv-LV, mk-MK, ms-MY, nb-NO, nl-NL, pl-PL, pt-BR, pt-PT, ro-RO, sk-SK, sl-SI, sr-RS, sv-SE, sw-KE, th-TH, tl-PH, tr-CY, tr-TR, uk-UA, ur-PK, vi-VN, zh-CN, zh-HK. Four of those are served by an approximate recording: en-GB — one English recording, US-accented; es-419 — one Spanish recording, informal register; ar-AE, ar-EG, ar-SA — Modern Standard Arabic, not a regional dialect; tr-CY — standard Turkish. Tags with an SMS template but no announcement audio (ka-GE, mt-MT, ru-RU, sq-AL) are accepted and fall back to en-US.'
+    ReportVerificationRequest:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: object
+          required:
+          - delivery_method
+          properties:
+            delivery_method:
+              type: string
+              enum:
+              - callout
+              - sms
+              description: Must match the delivery method of the verification.
+              example: sms
+            code:
+              type: string
+              description: The OTP code the user received.
+              example: '123456'
+    VerificationErrorCode:
+      title: VerificationErrorCode
+      description: Stable, machine-readable code explaining a failed/expired/denied verification; null while pending or once verified.
+      type: string
+      nullable: true
+      oneOf:
+      - type: string
+        title: dispatch_failed
+        enum:
+        - dispatch_failed
+        description: failed to deliver
+      - type: string
+        title: expired
+        enum:
+        - expired
+        description: expired
+      - type: string
+        title: too_many_attempts
+        enum:
+        - too_many_attempts
+        description: too many attempts
+      - type: string
+        title: stale_dispatch
+        enum:
+        - stale_dispatch
+        description: number unreachable
+      - type: string
+        title: application_deleted
+        enum:
+        - application_deleted
+        description: application deleted
+      - type: string
+        title: superseded
+        enum:
+        - superseded
+        description: superseded
+      - type: string
+        title: denied_missing_callback_url
+        enum:
+        - denied_missing_callback_url
+        description: application has no callback_url
+      - type: string
+        title: denied_by_callback
+        enum:
+        - denied_by_callback
+        description: your callback denied the request
+      - type: string
+        title: denied_invalid_callback_response
+        enum:
+        - denied_invalid_callback_response
+        description: callback response was invalid
+      example: too_many_attempts
+    Verification:
+      type: object
+      required:
+      - id
+      - destination
+      - delivery_method
+      - fee
+      - status
+      - error_code
+      - error_detail
+      - expires_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Verification identifier.
+          example: 01a0435e-2b71-7762-b0c2-22fabc5ed19c
+        destination:
+          type: string
+          example: '4915112345678'
+        delivery_method:
+          type: string
+          enum:
+          - callout
+          - sms
+          example: sms
+        fee:
+          type: string
+          description: Charged fee including VAT, as a decimal string.
+          example: '0.06'
+        status:
+          type: string
+          enum:
+          - pending
+          - verified
+          - failed
+          - expired
+          - denied
+          description: Public verification status.
+          example: pending
+        error_code:
+          "$ref": "#/components/schemas/VerificationErrorCode"
+        error_detail:
+          type: string
+          nullable: true
+          description: Fixed human-readable text for `error_code` (see the VerificationErrorCode catalog); null when `error_code` is null.
+          example: too many attempts
+        expires_at:
+          type: string
+          format: date-time
+          description: When the verification expires (ISO 8601). Always set — it is assigned at creation and kept on finished verifications.
+          example: '2026-08-27T13:19:20Z'
+        sms:
+          type: object
+          description: Present only for the sms delivery method.
+          required:
+          - template
+          - language
+          - interception_timeout
+          properties:
+            template:
+              type: string
+              example: Your code is {{CODE}}
+            language:
+              type: string
+              example: de-DE
+              description: 'The content-language tag the system chose: the first requested tag that matched a template, or en-US when none did. Compare it with what you asked for to detect a fallback.'
+            interception_timeout:
+              type: integer
+              example: 120
+              description: 'Seconds a client should keep an on-device SMS listener armed. A fixed budget, not a countdown. Automatic capture stopping is not a verification deadline: manual entry works until expires_at.'
+            app_hash:
+              type: string
+              example: A1b2C3d4E5f
+              description: Echoed only when one was stored on this verification. Reflects what was persisted, not what was requested.
+        callout:
+          type: object
+          description: Present only for the callout delivery method.
+          required:
+          - language
+          properties:
+            language:
+              type: string
+              example: pt-BR
+              description: 'The content-language tag the announcement is played in: the first requested tag that matched a recording, or en-US when none did. Compare it with what you asked for to detect a fallback.'
+    VerificationResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          "$ref": "#/components/schemas/Verification"
+    ErrorCode:
+      title: ErrorCode
+      description: Stable, machine-readable error code. Every possible value is listed below with a description of what causes it.
+      oneOf:
+      - type: string
+        title: destination_blank
+        enum:
+        - destination_blank
+        description: destination can't be blank
+      - type: string
+        title: destination_invalid
+        enum:
+        - destination_invalid
+        description: destination is invalid
+      - type: string
+        title: delivery_method_blank
+        enum:
+        - delivery_method_blank
+        description: delivery method can't be blank
+      - type: string
+        title: delivery_method_inclusion
+        enum:
+        - delivery_method_inclusion
+        description: delivery method is not included in the list
+      - type: string
+        title: delivery_method_invalid
+        enum:
+        - delivery_method_invalid
+        description: delivery method is invalid
+      - type: string
+        title: languages_invalid
+        enum:
+        - languages_invalid
+        description: languages are invalid
+      - type: string
+        title: app_hash_invalid
+        enum:
+        - app_hash_invalid
+        description: app hash is invalid
+      - type: string
+        title: code_blank
+        enum:
+        - code_blank
+        description: code can't be blank
+      - type: string
+        title: destination_not_supported_for_channel
+        enum:
+        - destination_not_supported_for_channel
+        description: destination not supported for provided delivery method
+      - type: string
+        title: code_invalid
+        enum:
+        - code_invalid
+        description: code is invalid
+      - type: string
+        title: already_verified
+        enum:
+        - already_verified
+        description: verification is already verified; provided value is invalid
+      - type: string
+        title: not_ready_to_report
+        enum:
+        - not_ready_to_report
+        description: verification is not ready to be reported
+      - type: string
+        title: parameter_missing
+        enum:
+        - parameter_missing
+        description: request body must contain a valid data object
+      - type: string
+        title: not_found
+        enum:
+        - not_found
+        description: not found
+      - type: string
+        title: unauthorized
+        enum:
+        - unauthorized
+        description: unauthorized
+      - type: string
+        title: balance_insufficient
+        enum:
+        - balance_insufficient
+        description: insufficient balance
+      - type: string
+        title: validation_failed
+        enum:
+        - validation_failed
+        description: request is invalid
+      - type: string
+        title: internal_error
+        enum:
+        - internal_error
+        description: internal server error
+      - type: string
+        title: dispatch_failed
+        enum:
+        - dispatch_failed
+        description: failed to deliver
+      - type: string
+        title: expired
+        enum:
+        - expired
+        description: expired
+      - type: string
+        title: too_many_attempts
+        enum:
+        - too_many_attempts
+        description: too many attempts
+      - type: string
+        title: stale_dispatch
+        enum:
+        - stale_dispatch
+        description: number unreachable
+      - type: string
+        title: application_deleted
+        enum:
+        - application_deleted
+        description: application deleted
+      - type: string
+        title: superseded
+        enum:
+        - superseded
+        description: superseded
+      - type: string
+        title: denied_missing_callback_url
+        enum:
+        - denied_missing_callback_url
+        description: application has no callback_url
+      - type: string
+        title: denied_by_callback
+        enum:
+        - denied_by_callback
+        description: your callback denied the request
+      - type: string
+        title: denied_invalid_callback_response
+        enum:
+        - denied_invalid_callback_response
+        description: callback response was invalid
+      example: delivery_method_invalid
+    Error:
+      type: object
+      required:
+      - code
+      - detail
+      description: A single coded error. `detail` is the fixed human-readable text for `code` (see the ErrorCode catalog).
+      properties:
+        code:
+          "$ref": "#/components/schemas/ErrorCode"
+        detail:
+          type: string
+          example: delivery method is invalid
+    ErrorsResponse:
+      type: object
+      required:
+      - errors
+      properties:
+        errors:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Error"
+security:
+- basicAuth: []
+paths:
+  "/api/v1/verifications":
+    post:
+      summary: Create a verification
+      tags:
+      - Verifications
+      operationId: createVerification
+      description: 'Start a verification: routes the request and delivers the code (or places the call) via the chosen delivery method.'
+      security:
+      - basicAuth: []
+      parameters: []
+      responses:
+        '201':
+          description: verification created
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/VerificationResponse"
+        '402':
+          description: account balance exhausted
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '422':
+          description: validation failed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '401':
+          description: missing or invalid credentials
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CreateVerificationRequest"
+            examples:
+              sms:
+                summary: Deliver the code in a text message
+                value:
+                  data:
+                    destination: "+4915112345678"
+                    delivery_method: sms
+                    sms:
+                      languages:
+                      - de-DE
+                      - en-US
+                      app_hash: A1b2C3d4E5f
+              callout:
+                summary: Place a call that announces the code
+                value:
+                  data:
+                    destination: "+4915112345678"
+                    delivery_method: callout
+                    callout:
+                      languages:
+                      - pt-BR
+                      - pt-PT
+        required: true
+  "/api/v1/verifications/by_number/{number}":
+    parameters:
+    - name: number
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Phone number of the verification, in E.164 (leading + optional).
+    patch:
+      summary: Report a verification by number
+      tags:
+      - Verifications
+      operationId: reportVerificationByNumber
+      description: Submit the code the user received, addressing the verification by phone number. Terminal states read back idempotently.
+      security:
+      - basicAuth: []
+      parameters: []
+      responses:
+        '200':
+          description: report accepted
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/VerificationResponse"
+        '422':
+          description: validation failed or wrong code
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '404':
+          description: verification not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '401':
+          description: missing or invalid credentials
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ReportVerificationRequest"
+        required: true
+    get:
+      summary: Fetch a verification by number
+      tags:
+      - Verifications
+      operationId: getVerificationByNumber
+      description: Read the current status of the latest verification for a phone number.
+      security:
+      - basicAuth: []
+      responses:
+        '200':
+          description: verification found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/VerificationResponse"
+        '404':
+          description: verification not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '401':
+          description: missing or invalid credentials
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+  "/api/v1/verifications/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Verification id returned by create.
+    patch:
+      summary: Report a verification
+      tags:
+      - Verifications
+      operationId: reportVerification
+      description: Submit the code the user received. Terminal states read back idempotently.
+      security:
+      - basicAuth: []
+      parameters: []
+      responses:
+        '200':
+          description: report accepted
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/VerificationResponse"
+        '422':
+          description: validation failed or wrong code
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '404':
+          description: verification not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '401':
+          description: missing or invalid credentials
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ReportVerificationRequest"
+        required: true
+    get:
+      summary: Fetch a verification
+      tags:
+      - Verifications
+      operationId: getVerification
+      description: Read the current status of a verification.
+      security:
+      - basicAuth: []
+      responses:
+        '200':
+          description: verification found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/VerificationResponse"
+        '404':
+          description: verification not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
+        '401':
+          description: missing or invalid credentials
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorsResponse"
