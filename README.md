@@ -80,9 +80,12 @@ The document is plain OpenAPI 3.0.3 with no vendor extensions, so standard tooli
 
 SDKs: [Ruby](https://github.com/didww/didww-verification-ruby-sdk) ·
 [JS/TypeScript](https://github.com/didww/didww-verification-js-sdk) ·
+[Python](https://github.com/didww/didww-verification-python-sdk) ·
 [Dart/Flutter](https://github.com/didww/didww-verification-dart-sdk) ·
 [iOS](https://github.com/didww/didww-verification-ios-sdk) ·
 [Android](https://github.com/didww/didww-verification-android-sdk)
+
+SDK guides: [doc.didww.com/otp-verification/sdks](https://doc.didww.com/otp-verification/sdks/index.html)
 
 ## Feedback
 
