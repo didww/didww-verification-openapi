@@ -322,7 +322,8 @@
             "required": [
               "template",
               "language",
-              "interception_timeout"
+              "interception_timeout",
+              "code_length"
             ],
             "properties": {
               "template": {
@@ -336,8 +337,15 @@
               },
               "interception_timeout": {
                 "type": "integer",
-                "example": 120,
+                "example": 300,
                 "description": "Seconds a client should keep an on-device SMS listener armed. A fixed budget, not a countdown. Automatic capture stopping is not a verification deadline: manual entry works until expires_at."
+              },
+              "code_length": {
+                "type": "integer",
+                "minimum": 4,
+                "maximum": 8,
+                "example": 6,
+                "description": "Number of digits in the code that was sent, so the client can size its input. Configured per application; this is the length of THIS verification's code, not the current setting."
               },
               "app_hash": {
                 "type": "string",
@@ -350,13 +358,21 @@
             "type": "object",
             "description": "Present only for the callout delivery method.",
             "required": [
-              "language"
+              "language",
+              "code_length"
             ],
             "properties": {
               "language": {
                 "type": "string",
                 "example": "pt-BR",
                 "description": "The content-language tag the announcement is played in: the first requested tag that matched a recording, or en-US when none did. Compare it with what you asked for to detect a fallback."
+              },
+              "code_length": {
+                "type": "integer",
+                "minimum": 4,
+                "maximum": 8,
+                "example": 6,
+                "description": "Number of digits in the code that is announced, so the client can size its input. Configured per application; this is the length of THIS verification's code, not the current setting."
               }
             }
           }
@@ -504,6 +520,14 @@
               "balance_insufficient"
             ],
             "description": "insufficient balance"
+          },
+          {
+            "type": "string",
+            "title": "destination_in_cooldown",
+            "enum": [
+              "destination_in_cooldown"
+            ],
+            "description": "verification for this destination was requested too recently"
           },
           {
             "type": "string",
@@ -662,6 +686,24 @@
           },
           "402": {
             "description": "account balance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "repeat request for the same destination inside the cooldown window",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Whole seconds to wait before requesting this destination again."
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
