@@ -14,7 +14,7 @@ servers:
 - url: https://verification.didww.com
   description: Production
 - url: https://verification-sandbox.didww.com
-  description: Sandbox
+  description: 'Sandbox: no real SMS or calls are sent. Test numbers and outcomes: https://doc.didww.com/otp-verification/testing.html'
 components:
   securitySchemes:
     basicAuth:
@@ -144,11 +144,6 @@ components:
         enum:
         - too_many_attempts
         description: too many attempts
-      - type: string
-        title: stale_dispatch
-        enum:
-        - stale_dispatch
-        description: number unreachable
       - type: string
         title: application_deleted
         enum:
@@ -395,11 +390,6 @@ components:
         enum:
         - too_many_attempts
         description: too many attempts
-      - type: string
-        title: stale_dispatch
-        enum:
-        - stale_dispatch
-        description: number unreachable
       - type: string
         title: application_deleted
         enum:
