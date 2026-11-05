@@ -3,7 +3,7 @@
   "info": {
     "title": "DIDWW Verification API",
     "version": "v1",
-    "description": "REST API to create phone-number verifications and report the code the user\nreceived. Every request is authenticated with the OTP application\nkey and secret over HTTP Basic.\n",
+    "description": "REST API to create phone-number verifications and report the code the user\nreceived. Requests are authenticated with the OTP application key: HTTP Basic\n(key and secret), a signed request, or the bare key (public mode), as far as\nthe application's minimum authentication mode allows.\n\nRate limits, each counted per second. Above a limit the API answers 429 with\none of the error codes below and a `Retry-After: 1` header.\n- Public mode, per client IP address, across all accounts: 10 requests from\n  one IPv4 address, 2 from one IPv6 /64 (`rate_limit_per_ip`).\n- Failed authentication, per client IP address: after 5 failures from one IPv4\n  address or IPv6 /48, further requests are refused (`rate_limit_failed_auth`).\n- Per account, from any IP address: 10 requests (`rate_limit_per_account`),\n  of which 5 may be public mode (`rate_limit_public_per_account`).\n\nSupport can adjust the per-account limits. Daily and monthly volume limits per\napplication are described on POST /api/v1/verifications.\n",
     "license": {
       "name": "MIT",
       "url": "https://github.com/didww/didww-verification-openapi/blob/main/LICENSE"
@@ -68,6 +68,12 @@
                 "description": "How the code is delivered. Always \"sms\" in this payload.",
                 "example": "sms"
               },
+              "custom": {
+                "type": "string",
+                "maxLength": 4096,
+                "description": "Free text passed unchanged to your callback server in the verification_request event; never returned by this API. Reaches nobody when no callback is made: a signed request, or an application without a callback URL. Set from a mobile app, it is client-controlled: validate it against your own records. Do not put secrets in it.",
+                "example": "session=7f3c9a"
+              },
               "sms": {
                 "type": "object",
                 "description": "Options for the sms delivery method.",
@@ -83,11 +89,44 @@
                     ],
                     "description": "Preferred content languages (BCP 47 tags), most preferred first. Tags are matched exactly, so a region subtag is required: \"pl\" does not match the pl-PL template. Unmatched tags fall back to en-US. Supported: bg-BG, bs-BA, cs-CZ, da-DK, de-DE, el-GR, en-GB, en-US, es-419, es-ES, et-EE, fi-FI, fr-FR, he-IL, hr-HR, hu-HU, is-IS, it-IT, ja-JP, ka-GE, lt-LT, lv-LV, mk-MK, ms-MY, mt-MT, nb-NO, nl-NL, pl-PL, pt-BR, pt-PT, ro-RO, ru-RU, sk-SK, sl-SI, sq-AL, sr-RS, sv-SE, th-TH, uk-UA, zh-CN, zh-HK."
                   },
+                  "autofill": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": false,
+                    "required": [
+                      "type"
+                    ],
+                    "description": "Handset autofill marker added to the message. Omitted or null uses the application default (domain when the application has an sms_domain, otherwise none). A malformed object, or one sent together with the deprecated sms.app_hash → 422 autofill_invalid.",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "app_hash",
+                          "domain",
+                          "none"
+                        ],
+                        "example": "app_hash",
+                        "description": "app_hash: Android SMS Retriever; the message is prefixed with \"<#> \" and the hash is appended as its final token. domain: iOS; \"@<sms_domain> #<code>\" is appended as the last line, or 422 sms_domain_not_configured. none: no marker."
+                      },
+                      "value": {
+                        "type": "string",
+                        "example": "A1b2C3d4E5f",
+                        "description": "Required for app_hash, forbidden otherwise. Exactly 11 characters of [A-Za-z0-9+/]; a wrong format → 422 app_hash_invalid."
+                      }
+                    }
+                  },
                   "app_hash": {
                     "type": "string",
                     "nullable": true,
+                    "deprecated": true,
                     "example": "A1b2C3d4E5f",
-                    "description": "Android SMS Retriever application hash (exactly 11 characters of [A-Za-z0-9+/]). When supplied, the delivered message is prefixed with \"<#> \" and the hash is appended as its final token so the handset can auto-fill the code. Omit it on other platforms."
+                    "description": "Deprecated, use autofill {type: app_hash, value}. Read only when autofill is omitted; a wrong format → 422 app_hash_invalid, sending both → 422 autofill_invalid."
+                  },
+                  "template_group": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "acme-login",
+                    "description": "Name of a custom SMS template group (see the user panel). Overrides the application default when both are set. Unknown name → 422 template_group_not_found."
                   }
                 }
               }
@@ -124,6 +163,12 @@
                 "description": "How the code is delivered. Always \"callout\" in this payload.",
                 "example": "callout"
               },
+              "custom": {
+                "type": "string",
+                "maxLength": 4096,
+                "description": "Free text passed unchanged to your callback server in the verification_request event; never returned by this API. Reaches nobody when no callback is made: a signed request, or an application without a callback URL. Set from a mobile app, it is client-controlled: validate it against your own records. Do not put secrets in it.",
+                "example": "session=7f3c9a"
+              },
               "callout": {
                 "type": "object",
                 "description": "Options for the callout delivery method.",
@@ -135,6 +180,12 @@
                       "example": "pt-BR"
                     },
                     "description": "Preferred announcement languages (BCP 47 tags), most preferred first — the same tags and the same semantics as sms.languages, so one language list works for both channels. Tags are matched exactly, so a region subtag is required: \"pt\" does not match the pt-PT recording. Unmatched tags fall back to en-US; the tag actually used is returned as callout.language. Supported: af-ZA, ar-AE, ar-EG, ar-SA, bg-BG, bs-BA, cs-CZ, da-DK, de-DE, el-GR, en-GB, en-US, es-419, es-ES, et-EE, fi-FI, fr-FR, he-IL, hi-IN, hr-HR, hu-HU, id-ID, is-IS, it-IT, ja-JP, lt-LT, lv-LV, mk-MK, ms-MY, nb-NO, nl-NL, pl-PL, pt-BR, pt-PT, ro-RO, sk-SK, sl-SI, sr-RS, sv-SE, sw-KE, th-TH, tl-PH, tr-CY, tr-TR, uk-UA, ur-PK, vi-VN, zh-CN, zh-HK. Four of those are served by an approximate recording: en-GB — one English recording, US-accented; es-419 — one Spanish recording, informal register; ar-AE, ar-EG, ar-SA — Modern Standard Arabic, not a regional dialect; tr-CY — standard Turkish. Tags with an SMS template but no announcement audio (ka-GE, mt-MT, ru-RU, sq-AL) are accepted and fall back to en-US."
+                  },
+                  "template_group": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "acme-login",
+                    "description": "Name of a custom voice template group (see the user panel). Overrides the application default when both are set. Unknown name → 422 template_group_not_found."
                   }
                 }
               }
@@ -241,6 +292,30 @@
               "denied_invalid_callback_response"
             ],
             "description": "callback response was invalid"
+          },
+          {
+            "type": "string",
+            "title": "destination_not_supported_for_channel",
+            "enum": [
+              "destination_not_supported_for_channel"
+            ],
+            "description": "destination not supported for provided delivery method"
+          },
+          {
+            "type": "string",
+            "title": "application_paused",
+            "enum": [
+              "application_paused"
+            ],
+            "description": "application is paused"
+          },
+          {
+            "type": "string",
+            "title": "destination_country_disabled",
+            "enum": [
+              "destination_country_disabled"
+            ],
+            "description": "destination country is disabled in account settings"
           }
         ],
         "example": "too_many_attempts"
@@ -315,7 +390,10 @@
               "template",
               "language",
               "interception_timeout",
-              "code_length"
+              "code_length",
+              "template_group",
+              "template_group_used",
+              "template_fallback_reason"
             ],
             "properties": {
               "template": {
@@ -339,10 +417,59 @@
                 "example": 6,
                 "description": "Number of digits in the code that was sent, so the client can size its input. Configured per application; this is the length of THIS verification's code, not the current setting."
               },
+              "autofill": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "description": "Present only when an autofill marker was added to the SMS. Reflects what was persisted, not what was requested.",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "app_hash",
+                      "domain"
+                    ],
+                    "example": "app_hash"
+                  },
+                  "value": {
+                    "type": "string",
+                    "example": "A1b2C3d4E5f",
+                    "description": "The app hash or the sms_domain."
+                  }
+                }
+              },
               "app_hash": {
                 "type": "string",
+                "deprecated": true,
                 "example": "A1b2C3d4E5f",
-                "description": "Echoed only when one was stored on this verification. Reflects what was persisted, not what was requested."
+                "description": "Deprecated, use autofill.value. Present only for type app_hash."
+              },
+              "template_group": {
+                "type": "string",
+                "nullable": true,
+                "example": "acme-login",
+                "description": "Name of the custom template group applied, or null when none was."
+              },
+              "template_group_used": {
+                "type": "boolean",
+                "example": false,
+                "description": "Whether template_group actually produced the delivered text/audio."
+              },
+              "template_fallback_reason": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null,
+                  "language_missing",
+                  "version_pending",
+                  "version_rejected",
+                  "audio_not_ready",
+                  "group_missing"
+                ],
+                "example": null,
+                "description": "Why template_group_used is false; null when it is true."
               }
             }
           },
@@ -351,7 +478,10 @@
             "description": "Present only for the callout delivery method.",
             "required": [
               "language",
-              "code_length"
+              "code_length",
+              "template_group",
+              "template_group_used",
+              "template_fallback_reason"
             ],
             "properties": {
               "language": {
@@ -365,6 +495,31 @@
                 "maximum": 8,
                 "example": 6,
                 "description": "Number of digits in the code that is announced, so the client can size its input. Configured per application; this is the length of THIS verification's code, not the current setting."
+              },
+              "template_group": {
+                "type": "string",
+                "nullable": true,
+                "example": "acme-login",
+                "description": "Name of the custom template group applied, or null when none was."
+              },
+              "template_group_used": {
+                "type": "boolean",
+                "example": false,
+                "description": "Whether template_group actually produced the delivered text/audio."
+              },
+              "template_fallback_reason": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  null,
+                  "language_missing",
+                  "version_pending",
+                  "version_rejected",
+                  "audio_not_ready",
+                  "group_missing"
+                ],
+                "example": null,
+                "description": "Why template_group_used is false; null when it is true."
               }
             }
           }
@@ -440,6 +595,22 @@
               "app_hash_invalid"
             ],
             "description": "app hash is invalid"
+          },
+          {
+            "type": "string",
+            "title": "custom_too_long",
+            "enum": [
+              "custom_too_long"
+            ],
+            "description": "custom is too long"
+          },
+          {
+            "type": "string",
+            "title": "autofill_invalid",
+            "enum": [
+              "autofill_invalid"
+            ],
+            "description": "autofill is invalid"
           },
           {
             "type": "string",
@@ -523,6 +694,46 @@
           },
           {
             "type": "string",
+            "title": "volume_limit_reached",
+            "enum": [
+              "volume_limit_reached"
+            ],
+            "description": "the application reached its daily or monthly verification limit"
+          },
+          {
+            "type": "string",
+            "title": "rate_limit_per_ip",
+            "enum": [
+              "rate_limit_per_ip"
+            ],
+            "description": "too many requests from this IP address; contact support to raise the limit"
+          },
+          {
+            "type": "string",
+            "title": "rate_limit_failed_auth",
+            "enum": [
+              "rate_limit_failed_auth"
+            ],
+            "description": "too many failed authentication attempts from this IP address; try again later"
+          },
+          {
+            "type": "string",
+            "title": "rate_limit_per_account",
+            "enum": [
+              "rate_limit_per_account"
+            ],
+            "description": "too many requests for this account; contact support to raise the limit"
+          },
+          {
+            "type": "string",
+            "title": "rate_limit_public_per_account",
+            "enum": [
+              "rate_limit_public_per_account"
+            ],
+            "description": "too many public requests for this account; contact support to raise the limit"
+          },
+          {
+            "type": "string",
             "title": "validation_failed",
             "enum": [
               "validation_failed"
@@ -600,6 +811,38 @@
               "denied_invalid_callback_response"
             ],
             "description": "callback response was invalid"
+          },
+          {
+            "type": "string",
+            "title": "application_paused",
+            "enum": [
+              "application_paused"
+            ],
+            "description": "application is paused"
+          },
+          {
+            "type": "string",
+            "title": "destination_country_disabled",
+            "enum": [
+              "destination_country_disabled"
+            ],
+            "description": "destination country is disabled in account settings"
+          },
+          {
+            "type": "string",
+            "title": "template_group_not_found",
+            "enum": [
+              "template_group_not_found"
+            ],
+            "description": "template group not found"
+          },
+          {
+            "type": "string",
+            "title": "sms_domain_not_configured",
+            "enum": [
+              "sms_domain_not_configured"
+            ],
+            "description": "application has no SMS domain configured"
           }
         ],
         "example": "delivery_method_invalid"
@@ -679,13 +922,13 @@
             }
           },
           "429": {
-            "description": "repeat request for the same destination inside the cooldown window",
+            "description": "too many requests; nothing is created, sent or charged. The error code names the cause. `destination_in_cooldown`: any earlier verification for the destination, over any channel, blocks a new request for 30 seconds, unless it was denied or failed as unsupported. `volume_limit_reached`: the application reached its daily or monthly limit, counted over every channel together; days and months reset at 00:00 UTC, so Retry-After may be hours or weeks. Suggested message for the end user: \"Too many verification requests right now. Please try again later.\"",
             "headers": {
               "Retry-After": {
                 "schema": {
                   "type": "integer"
                 },
-                "description": "Whole seconds to wait before requesting this destination again."
+                "description": "Whole seconds to wait: until the destination cooldown ends, or until the reached daily or monthly limit resets."
               }
             },
             "content": {
@@ -730,12 +973,16 @@
                     "data": {
                       "destination": "+4915112345678",
                       "delivery_method": "sms",
+                      "custom": "session=7f3c9a",
                       "sms": {
                         "languages": [
                           "de-DE",
                           "en-US"
                         ],
-                        "app_hash": "A1b2C3d4E5f"
+                        "autofill": {
+                          "type": "app_hash",
+                          "value": "A1b2C3d4E5f"
+                        }
                       }
                     }
                   }
@@ -1000,6 +1247,24 @@
           },
           "401": {
             "description": "missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate limit exceeded: more than 10 requests per second for the account (`rate_limit_per_account`); also `rate_limit_per_ip`, `rate_limit_failed_auth` and `rate_limit_public_per_account`",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds to wait before sending the next request."
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
