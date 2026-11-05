@@ -37,8 +37,10 @@ https://raw.githubusercontent.com/didww/didww-verification-openapi/main/openapi/
 
 ## Authentication and environments
 
-Every request is authenticated with HTTP Basic: the OTP application key as the username and its
-secret as the password, both issued in the DIDWW user panel.
+Requests are authenticated with the OTP application key, issued in the DIDWW user panel: HTTP Basic
+(the key as the username, its secret as the password), a signed request, or the bare key (public
+mode), as far as the application's minimum authentication mode allows. The document's `info`
+section describes the modes and the rate limits.
 
 | Environment | Base URL |
 |-------------|----------|
